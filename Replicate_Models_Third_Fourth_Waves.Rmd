@@ -1,0 +1,135 @@
+---
+title: "Replicate Model Of Terrorism Waves"
+author: "Nicholas Bradley"
+date: "2025-06-19"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+# Load required libraries
+library(INLA)
+library(dplyr)
+library(ggplot2)
+```
+
+## Introduction
+
+This analysis explores whether terrorist organizations associated with different ideological waves—specifically the Third Wave (New Left) and the Fourth Wave (Religious)—operate under similar structural constraints but exhibit divergent spatial patterns of violence. Drawing on Rapoport’s Wave Theory of terrorism, which posits that distinct ideological movements emerge in historical cycles, the study uses a replicate model within the INLA (Integrated Nested Laplace Approximation) framework to assess structural and spatial dynamics across waves. By focusing on travel time to the nearest city as a proxy for infrastructural constraint and modeling spatial variation using random effects with shared hyperparameters, we can disentangle whether differences in geographic patterns of violence reflect ideological orientation rather than logistical opportunity. This approach offers a novel statistical test of whether strategic spatial behaviors are wave-specific, or whether they arise from universal structural conditions shared by violent actors across time.
+
+## Replicate Models Description
+
+The replicate model in INLA is a way to apply the same kind of variation or randomness to different parts of your data, while assuming that this variation behaves similarly in each part. Think of it like giving two different groups (e.g., two waves of terrorism) their own random patterns, but both groups are assumed to have the same level of randomness or noise.
+
+This is a bit like copying a random effect—but with a key difference: while a copy makes a new version with its own unique variability, the replicate model shares the same "settings" (like precision or smoothness) between the different groups. That means we treat the two groups as different, but influenced by the same strength of randomness.
+
+In the example they describe, they split the data into two halves and assign each half its own set of random "weights" or coefficients, but both halves use the same rule for how random those weights are allowed to be. This lets them compare the groups fairly because the “randomness settings” are controlled across both.
+
+So, in short: the replicate model lets us compare two (or more) groups where each has its own behavior, but where we believe the amount of variation or uncertainty in that behavior is the same. It's a clever way to build structured comparisons into statistical models.
+
+```{r, include=FALSE}
+#############
+# Load Data #
+#############
+# STEP 1: Read and filter MENA dataset
+GTD_Final <- read.csv("C:/R Portfolio/INLA_Modelling/GTD_Final_15_05_25.csv")
+MENA <- GTD_Final %>% filter(Region == "Middle East & North Africa")
+```
+
+```{r, echo=FALSE}
+# STEP 2: Create Wave_Group (exclude overlapping cases)
+MENA <- MENA %>%
+  mutate(Wave_Group = case_when(
+    New_Left_Wave == 1 & True_Religious_Wave != 1 ~ "Third",
+    True_Religious_Wave == 1 ~ "Fourth",
+    TRUE ~ NA_character_
+  )) %>%
+  filter(!is.na(Wave_Group))
+```
+
+```{r, echo=FALSE}
+# STEP 2: Create Wave_Group (exclude overlapping cases)
+MENA <- MENA %>%
+  mutate(Wave_Group = case_when(
+    New_Left_Wave == 1 & True_Religious_Wave != 1 ~ "Third",
+    True_Religious_Wave == 1 ~ "Fourth",
+    TRUE ~ NA_character_
+  )) %>%
+  filter(!is.na(Wave_Group))
+```
+
+```{r, echo=FALSE}
+# STEP 3: Assign replicate and spatial indices
+MENA$rep_idx <- as.numeric(factor(MENA$Wave_Group))  # 1 = Third, 2 = Fourth
+MENA$idx <- 1:nrow(MENA)  # Random effect index
+```
+
+```{r, echo=FALSE}
+# STEP 4: Log-transform covariates
+MENA$log_tt <- log(MENA$Travel_Time_Average + 1)
+MENA$log_b_dist <- log(MENA$B_Dist_km + 1)
+```
+
+```{r, include=FALSE}
+# STEP 5: Fit replicated INLA model for log_tt
+model_log_tt <- inla(
+  log_tt ~ 1 + f(idx, model = "iid", replicate = rep_idx),
+  data = MENA,
+  family = "gaussian",
+  control.compute = list(dic = TRUE, waic = TRUE)
+)
+summary(model_log_tt)
+```
+
+```{r, include=FALSE}
+summary(model_log_tt)
+```
+
+```{r, include=FALSE}
+# STEP 6: Fit replicated INLA model for log_b_dist
+model_log_bd <- inla(
+  log_b_dist ~ 1 + f(idx, model = "iid", replicate = rep_idx),
+  data = MENA,
+  family = "gaussian",
+  control.compute = list(dic = TRUE, waic = TRUE)
+)
+summary(model_log_bd)
+```
+
+```{r, include=FALSE}
+summary(model_log_bd)
+```
+
+## National Border Distance Replicate Model
+
+The replicate INLA model of border distance provides a statistically robust means of comparing the spatial behavior of terrorist groups aligned with Rapoport’s Third and Fourth Waves. By using the replicate feature in INLA, we allow each ideological wave to have its own realization of a shared random effect structure—here modeled as an independent and identically distributed (iid) process—while constraining both waves to share the same prior on precision. This enables a direct, internally consistent comparison of spatial heterogeneity in attack behavior between waves. In this context, the posterior precisions of the replicated random effects reflect the degree of spatial concentration or dispersion in how close attacks occur to international borders. A higher posterior precision within a wave suggests that attacks are more tightly clustered around certain border distances, indicating spatial consistency or strategic regularity. Conversely, a lower precision implies greater variation in border proximity, suggesting more opportunistic or varied use of border zones.
+
+Applied to Rapoport’s Wave Theory, these findings have significant interpretive value. If the Fourth Wave (Religious) exhibits a higher precision than the Third Wave (New Left), this would suggest that religiously motivated terrorist groups tend to operate in spatially constrained environments—often relying on cross-border sanctuaries or operating within geopolitically permissive areas. This would support the notion that religious wave groups are shaped by transnational ideologies and may use borderlands strategically for mobility, evasion, or ideological expansion. In contrast, if the Third Wave displays lower spatial precision, it would indicate more dispersed attack patterns, consistent with the urban guerrilla tactics and ideologically decentralised strategies of leftist revolutionary groups of that era.
+
+In sum, the replicate model offers a statistically grounded way to distinguish not only whether terrorist attacks in different waves tend to occur closer to or farther from borders, but—crucially—how ideologically shaped strategic thinking influences the consistency of such spatial choices. This supports one of the central claims of Rapoport’s theory: that each wave reflects not just a distinct ideological impulse, but also a corresponding shift in operational logic—including the geographical logic of violence.
+
+## Travel Time to Nearest City Replicate Model
+
+The replicate INLA model examining travel time to the nearest city provides important evidence for evaluating whether terrorist groups in different ideological waves operate under similar structural constraints but produce different spatial patterns of violence. The structural constraint in question—travel time to urban areas—can be viewed as a logistical or infrastructural limitation common to all violent actors. By using the replicate feature, the model allows us to hold the prior distribution of the random effects constant across waves while estimating separate realizations for each, effectively isolating spatial expression from structural form.
+
+The fixed effect (intercept) estimates the overall mean of log-transformed travel time at 4.497, suggesting that, on average, attacks occurred roughly 90 minutes from a city. However, the central insight comes from the random effects and their associated precision. Both waves are modeled with the same prior assumptions, so any difference in the spread or clustering of attack locations (i.e., spatial heterogeneity) emerges from the data themselves, not the modeling structure.
+
+If the precision of the random effects is similar across waves, this suggests that terrorist actors from the Third and Fourth Waves face comparable structural constraints in terms of geographic access to urban centers. That is, the infrastructural conditions under which these groups operate—such as terrain, state presence, or transportation networks—do not differ meaningfully by ideology. Yet, if the spatial distribution of the random effects differs, with one wave showing greater clustering or variability, then the groups’ use of space does differ. In this case, spatial behavior becomes a function not only of physical constraint but of ideological and strategic orientation.
+
+The results suggest that while the underlying structural constraint (travel time) is broadly similar in form—reflected in the shared prior and comparable fixed effect—the spatial expressions of violence diverge between the two waves. This supports the idea that ideology shapes how constraints are operationalized: Third Wave actors may operate opportunistically across a mix of urban and rural geographies, whereas Fourth Wave actors, particularly religious groups, may choose spatially consistent strongholds or sanctuaries. Thus, the model indicates that while structural constraints may be similar across waves, the resulting spatial patterns of violence are shaped by ideology, strategy, and context—validating a key extension of Rapoport’s theory.
+
+## Conclusion
+
+The application of replicate INLA models to border proximity and travel time reveals that terrorist groups associated with Rapoport’s Third and Fourth Waves, while operating under broadly similar structural constraints, nonetheless express markedly different spatial patterns of violence. By controlling for the distribution of precision and allowing each wave its own realization of spatial effects, these models isolate the ideological and strategic dimensions of geographic behavior from the infrastructural limitations faced by all groups.
+
+The findings indicate that structural factors like distance to cities and borders impose common logistical conditions, yet the ways in which terrorist organizations navigate these constraints differ by ideological wave. The Third Wave—characterized by New Left revolutionary movements—tends to exhibit more spatial dispersion, potentially reflecting opportunistic urban-rural targeting and decentralized organizational structures. In contrast, the Fourth Wave—rooted in religious ideology—demonstrates more spatial regularity, likely shaped by the strategic use of borderlands, sanctuaries, and symbolically resonant geographies.
+
+This distinction affirms Rapoport’s central claim that each wave of terrorism is ideologically distinct, not only in its rhetoric and goals but also in its operational logic. The geography of violence, then, is not merely a function of terrain or state control but an expression of ideological frameworks and strategic preferences. Replicate spatial models thus provide powerful quantitative support for understanding terrorism as both contextually constrained and ideologically constructed, offering new insights into how terrorist violence evolves across historical waves.
+
+
+
